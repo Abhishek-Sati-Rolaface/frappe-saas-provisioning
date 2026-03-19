@@ -2,6 +2,7 @@ import frappe
 import subprocess
 import json
 import os
+from saas_provisioning.dns import add_caddy_domain
 
 from frappe.desk.page.setup_wizard.setup_wizard import get_setup_stages, parse_args, process_setup_stages, sanitize_input
 
@@ -90,6 +91,12 @@ def create_site_job(site_name, db_name, payload):
         print(f"🏗️  Running ERPNext setup wizard...")
         print(f"📋 Setup config: {json.dumps(setup_payload, indent=2, default=str)}")
 
+
+
+        # Step 2 — ✅ ADD THIS LINE — auto-add domain to Caddy
+        add_caddy_domain(site_name)
+
+
         # Run ERPNext setup wizard
         # from frappe.desk.page.setup_wizard.setup_wizard import setup_complete
 
@@ -127,7 +134,7 @@ def create_site_job(site_name, db_name, payload):
         # 3️⃣ Send welcome email (optional)
         # print(f"📧 Sending welcome email to {payload.get('email')}...")
         # send_welcome_email(payload.get("email"), site_name, payload.get("company_name"))
-
+    
 
     except subprocess.CalledProcessError as e:
         error_msg = f"Bench command failed: {e.stderr}"
