@@ -2,6 +2,7 @@ import frappe
 import subprocess
 import json
 import os
+import shutil
 from saas_provisioning.dns import add_caddy_domain
 
 from frappe.desk.page.setup_wizard.setup_wizard import get_setup_stages, parse_args, process_setup_stages, sanitize_input
@@ -23,9 +24,11 @@ def create_site_job(site_name, db_name, payload):
     try:
         # 1️⃣ Create site using bench command
         print(f"⚙️  Running bench new-site command...")
+
+        bench_executable = shutil.which("bench")
         
         cmd = [
-            "bench", "new-site", site_name,
+            bench_executable, "new-site", site_name,
             "--db-name", db_name,
             "--admin-password", payload.get("password"),
             "--install-app", "erpnext",
