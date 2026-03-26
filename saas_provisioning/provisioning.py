@@ -24,11 +24,9 @@ def create_site_job(site_name, db_name, payload):
     try:
         # 1️⃣ Create site using bench command
         print(f"⚙️  Running bench new-site command...")
-
-        bench_executable = shutil.which("bench")
         
         cmd = [
-            bench_executable, "new-site", site_name,
+            "/home/frappe/.local/bin/bench", "new-site", site_name,
             "--db-name", db_name,
             "--admin-password", payload.get("password"),
             "--install-app", "erpnext",
