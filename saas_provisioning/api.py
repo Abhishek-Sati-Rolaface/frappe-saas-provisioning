@@ -36,7 +36,8 @@ def create_site(**payload):
     # 4️⃣ Enqueue background job
     frappe.enqueue(
         method="saas_provisioning.provisioning.create_site_job",
-        queue="default",
+        queue="long",
+        timeout=1800,  # 30 minutes
         site_name=site_name,
         db_name=db_name,
         payload=payload

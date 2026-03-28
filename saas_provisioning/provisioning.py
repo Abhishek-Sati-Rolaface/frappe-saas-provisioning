@@ -45,7 +45,7 @@ def create_site_job(site_name, db_name, payload):
             check=True,
             capture_output=True,
             text=True,
-            timeout=300  # 5 minute timeout
+            timeout=1500  # 5 minute timeout
         )
         
         # Log subprocess output
