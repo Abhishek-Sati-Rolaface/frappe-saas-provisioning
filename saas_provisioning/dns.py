@@ -1,59 +1,61 @@
 # saas_manager/api/signup.py
 import frappe
-import re
-import os
-import json
 import subprocess
 
-
-
 CADDYFILE_PATH = "/etc/caddy/Caddyfile"
-TENANTS_MARKER = "# TENANTS_END"
-CADDY_EMAIL = "you@yourapp.com"
+BENCH_SITES_PATH = "/srv/apps/erp/backend/master-bench/sites"
 
 def add_caddy_domain(site_name: str):
     """
     Appends a new site block to Caddyfile and reloads Caddy.
     Called after bench new-site succeeds.
     """
-    # 1. Build the new Caddy block
-    new_block = f"""
-                    {site_name} {{
-                        reverse_proxy localhost:8000 {{
-                            header_up Host {site_name}
-                        }}
-                        tls {CADDY_EMAIL}
-                    }}
-
-                    """
-    
-    # 2. Read current Caddyfile
+    # 1. Read current Caddyfile
     with open(CADDYFILE_PATH, "r") as f:
         content = f.read()
-    
-    # 3. Check if domain already exists (avoid duplicates)
+
+    # 2. Check if domain already exists (avoid duplicates)
     if site_name in content:
         frappe.logger().info(f"Caddy: {site_name} already exists, skipping.")
         return
-    
-    # 4. Insert before the TENANTS_END marker
-    updated_content = content.replace(
-        TENANTS_MARKER,
-        new_block + TENANTS_MARKER
+
+    # 3. Build the new Caddy block
+    new_block = (
+        f"\n{site_name} {{\n"
+        f"\n"
+        f"    @assets path /assets/*\n"
+        f"    root * {BENCH_SITES_PATH}\n"
+        f"    file_server @assets\n"
+        f"\n"
+        f"    @files path /files/*\n"
+        f"    root * {BENCH_SITES_PATH}/{site_name}\n"
+        f"    file_server @files\n"
+        f"\n"
+        f"    reverse_proxy 127.0.0.1:8004\n"
+        f"}}\n"
     )
-    
-    # 5. Write back
-    with open(CADDYFILE_PATH, "w") as f:
-        f.write(updated_content)
-    
-    # 6. Reload Caddy (no downtime — hot reload)
-    result = subprocess.run(
-        ["caddy", "reload", "--config", CADDYFILE_PATH],
-        capture_output=True, text=True
+
+    # 4. Append to Caddyfile using sudo tee -a (no overwrite)
+    write_proc = subprocess.run(
+        ["sudo", "tee", "-a", CADDYFILE_PATH],
+        input=new_block,
+        capture_output=True,
+        text=True
     )
-    
-    if result.returncode != 0:
-        frappe.log_error(f"Caddy reload failed: {result.stderr}", "Caddy Error")
-        frappe.throw("Failed to configure domain. Contact support.")
-    
+
+    if write_proc.returncode != 0:
+        frappe.log_error(f"Caddyfile write failed: {write_proc.stderr}", "Caddy Error")
+        frappe.throw("Failed to write Caddy config. Contact support.")
+
+    # 5. Reload Caddy
+    reload_proc = subprocess.run(
+        ["sudo", "/usr/bin/caddy", "reload", "--config", CADDYFILE_PATH],
+        capture_output=True,
+        text=True
+    )
+
+    if reload_proc.returncode != 0:
+        frappe.log_error(f"Caddy reload failed: {reload_proc.stderr}", "Caddy Error")
+        frappe.throw("Failed to reload Caddy. Contact support.")
+
     frappe.logger().info(f"Caddy: {site_name} added and reloaded successfully.")
