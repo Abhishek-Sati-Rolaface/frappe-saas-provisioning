@@ -193,9 +193,12 @@ from saas_provisioning.dns import add_caddy_domain
 
 from frappe.desk.page.setup_wizard.setup_wizard import get_setup_stages, parse_args, process_setup_stages, sanitize_input
 
+MARIADB_ROOT_USERNAME = "root"
+MARIADB_ROOT_PASSWORD = "root123"  # ✅ Set this
+
 def create_site_job(site_name, db_name, payload):
     bench_path = frappe.utils.get_bench_path()
-    
+
     print(f"🚀 Starting site creation for {site_name}")
     frappe.logger().info(f"Starting site creation for {site_name}")
 
@@ -206,13 +209,15 @@ def create_site_job(site_name, db_name, payload):
             "--db-name", db_name,
             "--admin-password", payload.get("password"),
             "--install-app", "erpnext",
-            "--mariadb-user-host-login-scope=%"
+            "--mariadb-user-host-login-scope=%",
+            "--mariadb-root-username", MARIADB_ROOT_USERNAME,  # ✅ Prevents interactive prompt
+            "--mariadb-root-password", MARIADB_ROOT_PASSWORD,  # ✅ Prevents interactive prompt
         ]
 
         for app in payload.get("apps", []):
             cmd.extend(["--install-app", app])
 
-        print(f"📝 Running: {' '.join(cmd)}")
+        print(f"📝 Running bench new-site for {site_name}")
 
         result = subprocess.run(
             cmd,
@@ -220,7 +225,7 @@ def create_site_job(site_name, db_name, payload):
             check=True,
             capture_output=True,
             text=True,
-            timeout=1500
+            timeout=3600  # ✅ 1 hour — bench new-site takes ~2 mins but give plenty of room
         )
 
         if result.stdout:
@@ -257,7 +262,7 @@ def create_site_job(site_name, db_name, payload):
 
         if frappe.is_setup_complete():
             print(f"⚠️  Setup already completed for {site_name}, skipping.")
-            add_caddy_domain(site_name)  # Still add to Caddy
+            add_caddy_domain(site_name)
             return {"status": "ok"}
 
         # 3️⃣ Run ERPNext setup wizard
@@ -272,7 +277,7 @@ def create_site_job(site_name, db_name, payload):
                 stages=stages,
                 user_input=kwargs,
                 is_background_task=True,
-                timeout=1800  # ✅ Fix: was defaulting to 300s
+                timeout=1800
             )
         else:
             process_setup_stages(stages, kwargs)
