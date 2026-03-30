@@ -21,7 +21,7 @@ def create_site(**payload):
 
     # 2️⃣ Build site + db name
     site_name = re.sub(r"[^a-z0-9]", "", company_name.lower())
-    site_name = f"{site_name}.rolaface.com"
+    site_name = f"api.erp.{site_name}.rolaface.com"
     db_name = site_name.replace(".", "_")
 
     bench_path = frappe.utils.get_bench_path()
