@@ -319,25 +319,29 @@ def add_dns_record(subdomain: str):
     token = conf["token"]
     server_ip = conf["server_ip"]
 
-    # url = f"https://api.hostinger.com/v1/dns/zones/{domain}/records"
-    url = f"https://developers.hostinger.com/api/dns/v1/zones/{conf['domain']}"
+    url = f"https://developers.hostinger.com/api/dns/v1/zones/{domain}"
 
     headers = {
         "Authorization": f"Bearer {token}",
         "Content-Type": "application/json"
     }
 
+    # Hostinger API expects zone records in this format
     payload = {
-        "type": "A",
-        "name": subdomain,
-        "content": server_ip,
-        "ttl": 3600
+        "overwrite": False,
+        "zone": [
+            {
+                "name": subdomain,
+                "type": "A",
+                "records": [{"content": server_ip, "ttl": 3600}]
+            }
+        ]
     }
 
     try:
-        response = requests.post(url, json=payload, headers=headers, timeout=10)
+        response = requests.put(url, json=payload, headers=headers, timeout=10)
 
-        if response.status_code in (200, 201):
+        if response.status_code in (200, 201, 202):
             frappe.logger().info(f"DNS: A record added for {subdomain}.{domain} → {server_ip}")
         elif response.status_code == 422:
             # Record already exists — not an error
