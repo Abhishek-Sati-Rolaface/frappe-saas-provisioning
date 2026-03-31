@@ -339,23 +339,37 @@ def add_dns_record(subdomain: str):
     }
 
     try:
+        frappe.logger().info(f"DNS: Sending PUT request to {url}")
+        frappe.logger().info(f"DNS: Subdomain: {subdomain}, Server IP: {server_ip}")
         response = requests.put(url, json=payload, headers=headers, timeout=10)
+        
+        frappe.logger().info(f"DNS: Response status code: {response.status_code}")
+        if response.text:
+            frappe.logger().info(f"DNS: Response body: {response.text}")
 
         if response.status_code in (200, 201, 202):
-            frappe.logger().info(f"DNS: A record added for {subdomain}.{domain} → {server_ip}")
+            frappe.logger().info(f"DNS: ✓ A record added for {subdomain}.{domain} → {server_ip}")
         elif response.status_code == 422:
             # Record already exists — not an error
-            frappe.logger().info(f"DNS: A record for {subdomain}.{domain} already exists, skipping.")
+            frappe.logger().info(f"DNS: ✓ A record for {subdomain}.{domain} already exists, skipping.")
         else:
-            frappe.log_error(
-                f"DNS add failed for {subdomain}.{domain}: {response.status_code} {response.text}",
-                "DNS Error"
-            )
-            frappe.throw(f"Failed to add DNS record for {subdomain}.{domain}")
+            error_detail = response.text if response.text else f"HTTP {response.status_code}"
+            error_msg = f"DNS API error for {subdomain}.{domain}: {error_detail}"
+            frappe.log_error(error_msg, "DNS Error")
+            frappe.throw(error_msg)
 
+    except requests.exceptions.Timeout:
+        error_msg = f"DNS request timeout for {subdomain}.{domain} (10s)"
+        frappe.log_error(error_msg, "DNS Error")
+        frappe.throw(error_msg)
     except requests.exceptions.RequestException as e:
-        frappe.log_error(f"DNS request error for {subdomain}.{domain}: {str(e)}", "DNS Error")
-        frappe.throw(f"DNS request failed for {subdomain}.{domain}")
+        error_msg = f"DNS request error for {subdomain}.{domain}: {str(e)}"
+        frappe.log_error(error_msg, "DNS Error")
+        frappe.throw(error_msg)
+    except Exception as e:
+        error_msg = f"DNS unexpected error for {subdomain}.{domain}: {str(e)}"
+        frappe.log_error(error_msg, "DNS Error")
+        frappe.throw(error_msg)
 
 
 def add_caddy_domain(site_name: str):
