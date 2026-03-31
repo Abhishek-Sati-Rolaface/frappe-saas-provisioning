@@ -326,12 +326,195 @@
 
 
 
+# import frappe
+# import subprocess
+# import json
+# import os
+# import shutil
+# import time
+# from saas_provisioning.dns import add_caddy_domain
+
+# from frappe.desk.page.setup_wizard.setup_wizard import get_setup_stages, parse_args, process_setup_stages, sanitize_input
+
+# MARIADB_ROOT_USERNAME = "root"
+# MARIADB_ROOT_PASSWORD = "root123"
+
+
+# def create_site_job(site_name, db_name, payload):
+#     bench_path = frappe.utils.get_bench_path()
+
+#     print(f"🚀 Starting site creation for {site_name}")
+#     frappe.logger().info(f"Starting site creation for {site_name}")
+
+#     try:
+#         # 1️⃣ Create site using bench command
+#         cmd = [
+#             "/home/frappe/.local/bin/bench", "new-site", site_name,
+#             "--db-name", db_name,
+#             "--admin-password", payload.get("password"),
+#             "--install-app", "erpnext",
+#             "--mariadb-user-host-login-scope=%",
+#             "--mariadb-root-username", MARIADB_ROOT_USERNAME,
+#             "--mariadb-root-password", MARIADB_ROOT_PASSWORD,
+#         ]
+
+#         for app in payload.get("apps", []):
+#             cmd.extend(["--install-app", app])
+
+#         print(f"📝 Running bench new-site for {site_name}")
+
+#         result = subprocess.run(
+#             cmd,
+#             cwd=bench_path,
+#             check=True,
+#             capture_output=True,
+#             text=True,
+#             timeout=3600
+#         )
+
+#         if result.stdout:
+#             print(f"✅ Bench output:\n{result.stdout}")
+#         if result.stderr:
+#             print(f"⚠️  Bench stderr:\n{result.stderr}")
+
+#         print(f"✅ Site {site_name} created successfully")
+#         frappe.logger().info(f"Site {site_name} created successfully")
+
+#         # 2️⃣ Initialize site context
+#         frappe.init(site=site_name, force=True)
+#         frappe.connect()
+#         frappe.set_user("Administrator")
+#         frappe.clear_cache()
+
+#         # 3️⃣ Check if setup already complete
+#         if frappe.is_setup_complete():
+#             print(f"⚠️  Setup already completed for {site_name}, skipping.")
+#             add_caddy_domain(site_name)
+#             return {"status": "ok"}
+
+#         frappe.conf.trigger_site_setup_in_background = True
+
+#         setup_payload = {
+#             "currency": payload.get("currency"),
+#             "country": payload.get("country"),
+#             "timezone": payload.get("timezone"),
+#             "language": payload.get("language", "en"),
+#             "full_name": payload.get("full_name"),
+#             "email": payload.get("email"),
+#             "password": payload.get("password"),
+#             "company_name": payload.get("company_name"),
+#             "company_abbr": payload.get("company_abbr"),
+#             "chart_of_accounts": payload.get("chart_of_accounts"),
+#             "fy_start_date": payload.get("fy_start_date"),
+#             "fy_end_date": payload.get("fy_end_date"),
+#             "setup_demo": payload.get("setup_demo", 0),
+#         }
+
+#         # 4️⃣ Run ERPNext setup wizard
+#         kwargs = parse_args(sanitize_input(setup_payload))
+#         stages = get_setup_stages(kwargs)
+#         is_background_task = frappe.conf.get("trigger_site_setup_in_background")
+
+#         print(f"is_background_task = {is_background_task}")
+
+#         if is_background_task:
+#             # Enqueue setup wizard
+#             process_setup_stages.enqueue(
+#                 stages=stages,
+#                 user_input=kwargs,
+#                 is_background_task=True,
+#                 timeout=1800
+#             )
+
+#             # 5️⃣ Poll until setup wizard completes (max 15 mins)
+#             print(f"⏳ Waiting for setup wizard to complete for {site_name}...")
+#             setup_complete = False
+
+#             for attempt in range(90):  # 90 x 10s = 15 mins
+#                 time.sleep(10)
+#                 try:
+#                     frappe.init(site=site_name, force=True)
+#                     frappe.connect()
+#                     frappe.set_user("Administrator")
+
+#                     if frappe.is_setup_complete():
+#                         setup_complete = True
+#                         print(f"✅ Setup wizard completed for {site_name} (attempt {attempt + 1})")
+#                         frappe.logger().info(f"Setup wizard completed for {site_name}")
+#                         break
+#                     else:
+#                         print(f"⏳ Setup not complete yet... attempt {attempt + 1}/90")
+
+#                 except Exception as poll_error:
+#                     print(f"⚠️  Poll error on attempt {attempt + 1}: {str(poll_error)}")
+#                     continue
+
+#             if not setup_complete:
+#                 error_msg = f"Setup wizard timed out after 15 mins for {site_name}"
+#                 print(f"❌ {error_msg}")
+#                 frappe.log_error(error_msg, "Provisioning Timeout")
+#                 raise Exception(error_msg)
+
+#         else:
+#             # Synchronous setup
+#             process_setup_stages(stages, kwargs)
+#             print(f"✅ Synchronous setup completed for {site_name}")
+
+#         # 6️⃣ Add domain to Caddy AFTER setup is fully complete
+#         print(f"🌐 Adding {site_name} to Caddy...")
+#         add_caddy_domain(site_name)
+
+#         # 7️⃣ Send welcome email
+#         send_welcome_email(
+#             email=payload.get("email"),
+#             site_name=site_name,
+#             company_name=payload.get("company_name")
+#         )
+
+#         print(f"🎉 Site provisioning completed successfully!")
+#         frappe.logger().info(f"Site {site_name} provisioned successfully")
+
+#         return {"status": "success", "site": site_name}
+
+#     except subprocess.CalledProcessError as e:
+#         error_msg = f"Bench command failed: {e.stderr}"
+#         print(f"❌ ERROR: {error_msg}")
+#         frappe.log_error(error_msg, "Site Creation Failed")
+#         raise
+
+#     except Exception as e:
+#         import traceback
+#         error_msg = f"Site setup failed for {site_name}: {str(e)}"
+#         print(f"❌ ERROR: {error_msg}")
+#         print(f"📍 Traceback:\n{traceback.format_exc()}")
+#         frappe.log_error(error_msg, "Site Creation Failed")
+#         raise
+
+
+# def send_welcome_email(email, site_name, company_name):
+#     try:
+#         frappe.sendmail(
+#             recipients=[email],
+#             subject=f"Welcome to {company_name} - Your ERP Site is Ready!",
+#             message=f"""
+#             <h2>Your ERP site is ready! 🎉</h2>
+#             <p><strong>Site URL:</strong> <a href="https://{site_name}">https://{site_name}</a></p>
+#             <p><strong>Username:</strong> {email}</p>
+#             <p>Best regards,<br>Your ERP Team</p>
+#             """,
+#             now=True
+#         )
+#         print(f"✅ Welcome email sent to {email}")
+#     except Exception as e:
+#         print(f"⚠️  Failed to send welcome email: {str(e)}")
+
+
+
 import frappe
 import subprocess
 import json
 import os
 import shutil
-import time
 from saas_provisioning.dns import add_caddy_domain
 
 from frappe.desk.page.setup_wizard.setup_wizard import get_setup_stages, parse_args, process_setup_stages, sanitize_input
@@ -387,7 +570,7 @@ def create_site_job(site_name, db_name, payload):
         frappe.clear_cache()
 
         # 3️⃣ Check if setup already complete
-        if frappe.is_setup_complete():
+        if frappe.db.get_single_value("System Settings", "setup_complete"):
             print(f"⚠️  Setup already completed for {site_name}, skipping.")
             add_caddy_domain(site_name)
             return {"status": "ok"}
@@ -418,58 +601,26 @@ def create_site_job(site_name, db_name, payload):
         print(f"is_background_task = {is_background_task}")
 
         if is_background_task:
-            # Enqueue setup wizard
+            # Enqueue setup wizard — runs in background, no need to wait
             process_setup_stages.enqueue(
                 stages=stages,
                 user_input=kwargs,
                 is_background_task=True,
                 timeout=1800
             )
-
-            # 5️⃣ Poll until setup wizard completes (max 15 mins)
-            print(f"⏳ Waiting for setup wizard to complete for {site_name}...")
-            setup_complete = False
-
-            for attempt in range(90):  # 90 x 10s = 15 mins
-                time.sleep(10)
-                try:
-                    frappe.init(site=site_name, force=True)
-                    frappe.connect()
-                    frappe.set_user("Administrator")
-
-                    if frappe.is_setup_complete():
-                        setup_complete = True
-                        print(f"✅ Setup wizard completed for {site_name} (attempt {attempt + 1})")
-                        frappe.logger().info(f"Setup wizard completed for {site_name}")
-                        break
-                    else:
-                        print(f"⏳ Setup not complete yet... attempt {attempt + 1}/90")
-
-                except Exception as poll_error:
-                    print(f"⚠️  Poll error on attempt {attempt + 1}: {str(poll_error)}")
-                    continue
-
-            if not setup_complete:
-                error_msg = f"Setup wizard timed out after 15 mins for {site_name}"
-                print(f"❌ {error_msg}")
-                frappe.log_error(error_msg, "Provisioning Timeout")
-                raise Exception(error_msg)
-
         else:
-            # Synchronous setup
             process_setup_stages(stages, kwargs)
-            print(f"✅ Synchronous setup completed for {site_name}")
 
-        # 6️⃣ Add domain to Caddy AFTER setup is fully complete
+        # 5️⃣ Add Caddy domain — site already exists, setup runs in background
         print(f"🌐 Adding {site_name} to Caddy...")
         add_caddy_domain(site_name)
 
-        # 7️⃣ Send welcome email
-        send_welcome_email(
-            email=payload.get("email"),
-            site_name=site_name,
-            company_name=payload.get("company_name")
-        )
+        # # 6️⃣ Send welcome email
+        # send_welcome_email(
+        #     email=payload.get("email"),
+        #     site_name=site_name,
+        #     company_name=payload.get("company_name")
+        # )
 
         print(f"🎉 Site provisioning completed successfully!")
         frappe.logger().info(f"Site {site_name} provisioned successfully")
