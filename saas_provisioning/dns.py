@@ -302,10 +302,22 @@ FRONTEND_PORT = 3005  # React app port
 
 
 def get_config():
+    token = 'YGoCmpvmNkVKu59EkX2MlbqejhiCTzDbkmj6PJvN80b0903f'
+    domain = frappe.conf.get("saas_domain", "rolaface.com")
+    server_ip = frappe.conf.get("server_ip", "72.60.102.130")
+    
+    if not token:
+        error_msg = (
+            "Hostinger API token not configured. "
+            "Please set 'hostinger_api_token' in your Frappe site config."
+        )
+        frappe.log_error(error_msg, "DNS Configuration Error")
+        frappe.throw(error_msg)
+    
     return {
-        "token": frappe.conf.get("hostinger_api_token", "YGoCmpvmNkVKu59EkX2MlbqejhiCTzDbkmj6PJvN80b0"),
-        "domain": frappe.conf.get("saas_domain", "rolaface.com"),
-        "server_ip": frappe.conf.get("server_ip", "72.60.102.130"),
+        "token": token,
+        "domain": domain,
+        "server_ip": server_ip,
     }
 
 
@@ -349,6 +361,15 @@ def add_dns_record(subdomain: str):
 
         if response.status_code in (200, 201, 202):
             frappe.logger().info(f"DNS: ✓ A record added for {subdomain}.{domain} → {server_ip}")
+        elif response.status_code == 401:
+            # Authentication failed
+            error_msg = (
+                f"DNS API authentication failed. "
+                f"Invalid or expired Hostinger API token. "
+                f"Please check 'hostinger_api_token' in your Frappe site config."
+            )
+            frappe.log_error(error_msg, "DNS Authentication Error")
+            frappe.throw(error_msg)
         elif response.status_code == 422:
             # Record already exists — not an error
             frappe.logger().info(f"DNS: ✓ A record for {subdomain}.{domain} already exists, skipping.")
