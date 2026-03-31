@@ -319,7 +319,8 @@ def add_dns_record(subdomain: str):
     token = conf["token"]
     server_ip = conf["server_ip"]
 
-    url = f"https://api.hostinger.com/v1/dns/zones/{domain}/records"
+    # url = f"https://api.hostinger.com/v1/dns/zones/{domain}/records"
+    url = f"https://developers.hostinger.com/api/dns/v1/zones/{conf['domain']}"
 
     headers = {
         "Authorization": f"Bearer {token}",
