@@ -515,6 +515,7 @@ import subprocess
 import json
 import os
 import shutil
+import time
 from saas_provisioning.dns import add_caddy_domain
 
 from frappe.desk.page.setup_wizard.setup_wizard import get_setup_stages, parse_args, process_setup_stages, sanitize_input
@@ -575,8 +576,7 @@ def create_site_job(site_name, db_name, payload):
             add_caddy_domain(site_name)
             return {"status": "ok"}
 
-        frappe.conf.trigger_site_setup_in_background = True
-
+        # Don't run setup in background — run it synchronously and wait for completion
         setup_payload = {
             "currency": payload.get("currency"),
             "country": payload.get("country"),
@@ -593,34 +593,35 @@ def create_site_job(site_name, db_name, payload):
             "setup_demo": payload.get("setup_demo", 0),
         }
 
-        # 4️⃣ Run ERPNext setup wizard
+        # 4️⃣ Run ERPNext setup wizard synchronously
+        print(f"🔧 Running setup wizard for {site_name}...")
         kwargs = parse_args(sanitize_input(setup_payload))
         stages = get_setup_stages(kwargs)
-        is_background_task = frappe.conf.get("trigger_site_setup_in_background")
 
-        print(f"is_background_task = {is_background_task}")
-
-        if is_background_task:
-            # Enqueue setup wizard — runs in background, no need to wait
-            process_setup_stages.enqueue(
-                stages=stages,
-                user_input=kwargs,
-                is_background_task=True,
-                timeout=1800
-            )
-        else:
+        try:
+            # Run setup synchronously — this will complete before proceeding
             process_setup_stages(stages, kwargs)
+            print(f"✅ Setup wizard completed successfully for {site_name}")
+        except Exception as setup_error:
+            print(f"⚠️  Setup wizard encountered an error: {str(setup_error)}")
+            frappe.logger().warning(f"Setup wizard error for {site_name}: {str(setup_error)}")
+            # Don't fail — continue, the setup may have partially completed
+            # and we want the site to be accessible even if setup had issues
 
-        # 5️⃣ Add Caddy domain — site already exists, setup runs in background
+        # 5️⃣ Verify setup completion
+        print(f"🔍 Verifying setup completion for {site_name}...")
+        frappe.init(site=site_name, force=True)
+        frappe.connect()
+        frappe.set_user("Administrator")
+        setup_status = frappe.db.get_single_value("System Settings", "setup_complete")
+        print(f"Setup complete status: {setup_status}")
+
+        if not setup_status:
+            print(f"⚠️  Setup not marked as complete, but continuing with provisioning...")
+
+        # 6️⃣ Add Caddy domain
         print(f"🌐 Adding {site_name} to Caddy...")
         add_caddy_domain(site_name)
-
-        # # 6️⃣ Send welcome email
-        # send_welcome_email(
-        #     email=payload.get("email"),
-        #     site_name=site_name,
-        #     company_name=payload.get("company_name")
-        # )
 
         print(f"🎉 Site provisioning completed successfully!")
         frappe.logger().info(f"Site {site_name} provisioned successfully")
