@@ -610,21 +610,76 @@ def create_site_job(site_name, db_name, payload):
             return {"status": "ok"}
 
         # Don't run setup in background — run it synchronously and wait for completion
+        # Set default fiscal year dates based on country
+        import datetime
+        current_year = datetime.datetime.now().year
+        
+        # Timezone mapping for deprecated/old timezone names
+        timezone_mapping = {
+            "Asia/Calcutta": "Asia/Kolkata",
+            "Asia/Kathmandu": "Asia/Kathmandu",
+            "America/Buenos_Aires": "America/Argentina/Buenos_Aires",
+            "Australia/Melbourne": "Australia/Melbourne",
+            "Australia/Sydney": "Australia/Sydney",
+        }
+        
+        # Get timezone from payload and apply mapping if needed
+        raw_timezone = payload.get("timezone") or "UTC"
+        timezone = timezone_mapping.get(raw_timezone, raw_timezone)
+        
+        if raw_timezone != timezone:
+            print(f"⚠️  Timezone '{raw_timezone}' mapped to '{timezone}'")
+        
+        # Country-specific fiscal year mappings
+        country = payload.get("country") or "United States"
+        fiscal_years = {
+            "United States": (f"{current_year}-01-01", f"{current_year}-12-31"),  # Jan-Dec
+            "United Kingdom": (f"{current_year}-04-06", f"{current_year + 1}-04-05"),  # Apr-Apr
+            "India": (f"{current_year}-04-01", f"{current_year + 1}-03-31"),  # Apr-Mar
+            "Australia": (f"{current_year}-07-01", f"{current_year + 1}-06-30"),  # Jul-Jun
+            "Canada": (f"{current_year}-01-01", f"{current_year}-12-31"),  # Jan-Dec
+            "Germany": (f"{current_year}-01-01", f"{current_year}-12-31"),  # Jan-Dec
+            "France": (f"{current_year}-01-01", f"{current_year}-12-31"),  # Jan-Dec
+            "Japan": (f"{current_year}-04-01", f"{current_year + 1}-03-31"),  # Apr-Mar
+            "Singapore": (f"{current_year}-01-01", f"{current_year}-12-31"),  # Jan-Dec
+        }
+        
+        # Get fiscal year for the country, default to calendar year if not found
+        if country in fiscal_years:
+            default_fy_start, default_fy_end = fiscal_years[country]
+        else:
+            # Default to calendar year (Jan-Dec)
+            default_fy_start = f"{current_year}-01-01"
+            default_fy_end = f"{current_year}-12-31"
+        
+        # Override with provided dates if explicitly set
+        fy_start_date = payload.get("fy_start_date") or default_fy_start
+        fy_end_date = payload.get("fy_end_date") or default_fy_end
+        
         setup_payload = {
-            "currency": payload.get("currency"),
-            "country": payload.get("country"),
-            "timezone": payload.get("timezone"),
+            "currency": payload.get("currency") or "USD",
+            "country": country,
+            "timezone": timezone,
             "language": payload.get("language", "en"),
             "full_name": payload.get("full_name"),
             "email": payload.get("email"),
             "password": payload.get("password"),
             "company_name": payload.get("company_name"),
             "company_abbr": payload.get("company_abbr"),
-            "chart_of_accounts": payload.get("chart_of_accounts"),
-            "fy_start_date": payload.get("fy_start_date"),
-            "fy_end_date": payload.get("fy_end_date"),
+            "chart_of_accounts": payload.get("chart_of_accounts") or "Standard",
+            "fy_start_date": fy_start_date,
+            "fy_end_date": fy_end_date,
             "setup_demo": payload.get("setup_demo", 0),
         }
+        
+        print(f"📋 Setup payload (with country-specific defaults):")
+        print(f"  Currency: {setup_payload.get('currency')}")
+        print(f"  Country: {setup_payload.get('country')}")
+        print(f"  Timezone: {setup_payload.get('timezone')}")
+        print(f"  Company: {setup_payload.get('company_name')}")
+        print(f"  FY Start: {setup_payload.get('fy_start_date')} (per {country})")
+        print(f"  FY End: {setup_payload.get('fy_end_date')} (per {country})")
+        print(f"  Chart of Accounts: {setup_payload.get('chart_of_accounts')}")
 
         # 5️⃣ Run ERPNext setup wizard synchronously
         print(f"🔧 Running setup wizard for {site_name}...")
