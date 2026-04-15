@@ -537,6 +537,8 @@ def create_site_job(site_name, db_name, payload):
             "--db-name", db_name,
             "--admin-password", payload.get("password"),
             "--install-app", "erpnext",
+            "--install-app", "auth_api",
+            "--install-app", "custom_api",
             "--mariadb-user-host-login-scope=%",
             "--mariadb-root-username", MARIADB_ROOT_USERNAME,
             "--mariadb-root-password", MARIADB_ROOT_PASSWORD,
@@ -564,13 +566,43 @@ def create_site_job(site_name, db_name, payload):
         print(f"✅ Site {site_name} created successfully")
         frappe.logger().info(f"Site {site_name} created successfully")
 
-        # 2️⃣ Initialize site context
+        # 1️⃣a Run migrate command to apply custom fields from apps
+        print(f"🔄 Running migrate command for {site_name}...")
+        migrate_cmd = [
+            "/home/frappe/.local/bin/bench", "migrate", "--site", site_name
+        ]
+
+        try:
+            migrate_result = subprocess.run(
+                migrate_cmd,
+                cwd=bench_path,
+                check=True,
+                capture_output=True,
+                text=True,
+                timeout=600  # 10 minute timeout for migrate
+            )
+
+            if migrate_result.stdout:
+                print(f"✅ Migrate output:\n{migrate_result.stdout}")
+            if migrate_result.stderr:
+                print(f"⚠️  Migrate stderr:\n{migrate_result.stderr}")
+
+            print(f"✅ Migrate completed for {site_name}")
+            frappe.logger().info(f"Migrate completed for {site_name}")
+
+        except subprocess.CalledProcessError as migrate_error:
+            error_msg = f"Migrate command failed: {migrate_error.stderr}"
+            print(f"⚠️  {error_msg}")
+            frappe.logger().warning(error_msg)
+            # Don't fail the job — continue, migration might have partially completed
+
+        # 3️⃣ Initialize site context
         frappe.init(site=site_name, force=True)
         frappe.connect()
         frappe.set_user("Administrator")
         frappe.clear_cache()
 
-        # 3️⃣ Check if setup already complete
+        # 4️⃣ Check if setup already complete
         if frappe.db.get_single_value("System Settings", "setup_complete"):
             print(f"⚠️  Setup already completed for {site_name}, skipping.")
             add_caddy_domain(site_name)
@@ -593,7 +625,7 @@ def create_site_job(site_name, db_name, payload):
             "setup_demo": payload.get("setup_demo", 0),
         }
 
-        # 4️⃣ Run ERPNext setup wizard synchronously
+        # 5️⃣ Run ERPNext setup wizard synchronously
         print(f"🔧 Running setup wizard for {site_name}...")
         kwargs = parse_args(sanitize_input(setup_payload))
         stages = get_setup_stages(kwargs)

@@ -297,7 +297,7 @@ import subprocess
 import requests
 
 CADDYFILE_PATH = "/etc/caddy/Caddyfile"
-BENCH_SITES_PATH = "/srv/apps/erp/backend/master-bench/sites"
+BENCH_SITES_PATH = "/srv/apps/erp/backend/rolaface-izayne-bench/sites"
 FRONTEND_PORT = 3005  # React app port
 
 
@@ -526,7 +526,7 @@ def add_caddy_domain(site_name: str):
         f"    }}\n"
         f"\n"
         f"    handle {{\n"
-        f"        reverse_proxy 127.0.0.1:8004 {{\n"
+        f"        reverse_proxy 127.0.0.1:8005 {{\n"
         f"            header_up Host {{host}}\n"
         f"            header_up X-Frappe-Site-Name {backend_domain}\n"
         f"            header_up X-Real-IP {{remote}}\n"
