@@ -566,10 +566,10 @@ def create_site_job(site_name, db_name, payload):
         print(f"✅ Site {site_name} created successfully")
         frappe.logger().info(f"Site {site_name} created successfully")
 
-        # 1️⃣a Run migrate command to apply custom fields from apps
-        print(f"🔄 Running migrate command for {site_name}...")
+        # 1️⃣a Run migrate command to apply custom fields from auth_api and custom_api
+        print(f"🔄 Running migrate for {site_name}...")
         migrate_cmd = [
-            "/home/frappe/.local/bin/bench", "migrate", "--site", site_name
+            "/home/frappe/.local/bin/bench", "--site", site_name, "migrate"
         ]
 
         try:
@@ -584,7 +584,7 @@ def create_site_job(site_name, db_name, payload):
 
             if migrate_result.stdout:
                 print(f"✅ Migrate output:\n{migrate_result.stdout}")
-            if migrate_result.stderr:
+            if migrate_result.stderr and "error" in migrate_result.stderr.lower():
                 print(f"⚠️  Migrate stderr:\n{migrate_result.stderr}")
 
             print(f"✅ Migrate completed for {site_name}")
@@ -592,9 +592,10 @@ def create_site_job(site_name, db_name, payload):
 
         except subprocess.CalledProcessError as migrate_error:
             error_msg = f"Migrate command failed: {migrate_error.stderr}"
-            print(f"⚠️  {error_msg}")
+            print(f"⚠️  Warning: {error_msg}")
             frappe.logger().warning(error_msg)
-            # Don't fail the job — continue, migration might have partially completed
+            # Don't fail the job — continue with setup wizard
+            # Custom fields will be applied during setup wizard if needed
 
         # 3️⃣ Initialize site context
         frappe.init(site=site_name, force=True)
