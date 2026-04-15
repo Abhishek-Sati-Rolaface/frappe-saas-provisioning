@@ -666,7 +666,7 @@ def create_site_job(site_name, db_name, payload):
             "password": payload.get("password"),
             "company_name": payload.get("company_name"),
             "company_abbr": payload.get("company_abbr"),
-            "chart_of_accounts": payload.get("chart_of_accounts") or "Standard",
+            "chart_of_accounts": "Standard",
             "fy_start_date": fy_start_date,
             "fy_end_date": fy_end_date,
             "setup_demo": payload.get("setup_demo", 0),
