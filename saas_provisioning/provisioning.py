@@ -1,3 +1,4 @@
+from datetime import datetime
 import frappe
 import subprocess
 from saas_provisioning.dns import add_caddy_domain
@@ -154,13 +155,12 @@ def create_site_job(site_name, db_name, payload):
             fy_end_year = current_year
         
         # Calculate end month (one month before start month of next year)
-        fy_end_month = (fy_start_month - 1) % 12 + 1
+        fy_end_month = (fy_start_month - 2) % 12 + 1  # ← was (fy_start_month - 1) % 12 + 1
         
         # Get last day of end month
         if fy_end_month == 12:
             last_day_of_end_month = 31
         else:
-            # Get last day of month
             next_month = datetime.datetime(fy_end_year, fy_end_month + 1, 1)
             last_day_of_end_month = (next_month - datetime.timedelta(days=1)).day
         
