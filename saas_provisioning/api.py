@@ -21,21 +21,7 @@ def create_site(**payload):
 
     # 2️⃣ Build site + db name
     # Extract base company name (remove suffixes like "Pvt Ltd", "Ltd", "Inc", etc.)
-    clean_name = company_name.strip()
-    # Remove common company suffixes
-    suffixes = [
-        r'\s+(pvt\.?\s+ltd\.?)',
-        r'\s+(private\s+limited)',
-        r'\s+(ltd\.?)',
-        r'\s+(inc\.?)',
-        r'\s+(corporation)',
-        r'\s+(corp\.?)',
-        r'\s+(\&|and|ltd)',
-    ]
-    for suffix in suffixes:
-        clean_name = re.sub(suffix, "", clean_name, flags=re.IGNORECASE)
-    
-    # Convert to lowercase and remove all non-alphanumeric characters
+    clean_name = company_name.strip().split()[0]
     site_name = re.sub(r"[^a-z0-9]", "", clean_name.lower())
     site_name = f"api.erp.{site_name}.rolaface.com"
     db_name = site_name.replace(".", "_")
