@@ -20,9 +20,27 @@ def create_site(**payload):
         return
 
     # 2️⃣ Build site + db name
-    site_name = re.sub(r"[^a-z0-9]", "", company_name.lower())
+    # Extract base company name (remove suffixes like "Pvt Ltd", "Ltd", "Inc", etc.)
+    clean_name = company_name.strip()
+    # Remove common company suffixes
+    suffixes = [
+        r'\s+(pvt\.?\s+ltd\.?)',
+        r'\s+(private\s+limited)',
+        r'\s+(ltd\.?)',
+        r'\s+(inc\.?)',
+        r'\s+(corporation)',
+        r'\s+(corp\.?)',
+        r'\s+(\&|and|ltd)',
+    ]
+    for suffix in suffixes:
+        clean_name = re.sub(suffix, "", clean_name, flags=re.IGNORECASE)
+    
+    # Convert to lowercase and remove all non-alphanumeric characters
+    site_name = re.sub(r"[^a-z0-9]", "", clean_name.lower())
     site_name = f"api.erp.{site_name}.rolaface.com"
     db_name = site_name.replace(".", "_")
+    
+    print(f"📝 Company: '{company_name}' → Site: '{site_name}'")
 
     bench_path = frappe.utils.get_bench_path()
     sites_path = os.path.join(bench_path, "sites", site_name)
@@ -51,48 +69,4 @@ def create_site(**payload):
         "site": site_name,
         "message": "Site provisioning started"
     }
-
-# def create_site_job(payload, site_name, db_name):
-#     bench_path = frappe.utils.get_bench_path()
-
-#     subprocess.run(
-#         [
-#             "bench", "new-site", site_name,
-#             "--db-name", db_name,
-#             "--install-app", "erpnext",
-#             "--admin-password", payload.get("password"),
-#             "--mariadb-user-host-login-scope=%"
-#         ],
-#         cwd=bench_path,
-#         check=True,
-#     )
-
-#     frappe.init(site=site_name)
-#     frappe.connect()
-#     frappe.set_user("Administrator")
-
-#     try:
-#         frappe.enqueue(
-#             "frappe.desk.page.setup_wizard.setup_wizard.setup_complete",
-#             queue="long",
-#             args=(json.dumps(payload),),
-#         )
-#     finally:
-#         frappe.destroy()
-
-
-# def run_setup_wizard(site_name, setup_data):
-#     frappe.init(site=site_name)
-#     frappe.connect()
-#     frappe.set_user("Administrator")
-
-#     try:
-#         frappe.enqueue(
-#             "frappe.desk.page.setup_wizard.setup_wizard.setup_complete",
-#             queue="long",
-#             args=(json.dumps(setup_data),),
-#             is_async=True,
-#         )
-#     finally:
-#         frappe.destroy()
 

@@ -1,521 +1,5 @@
-# import frappe
-# import subprocess
-# import json
-# import os
-# import shutil
-# from saas_provisioning.dns import add_caddy_domain
-
-# from frappe.desk.page.setup_wizard.setup_wizard import get_setup_stages, parse_args, process_setup_stages, sanitize_input
-
-# def create_site_job(site_name, db_name, payload):
-#     """
-#     Background job to create and configure a new Frappe site.
-#     Note: Don't call frappe.destroy() - the job wrapper handles cleanup.
-#     """
-#     bench_path = frappe.utils.get_bench_path()
-    
-#     # Log to worker output (visible in worker.log)
-#     print(f"🚀 Starting site creation for {site_name}")
-#     print(f"📦 Payload: {json.dumps(payload, indent=2)}")
-    
-#     frappe.logger().info(f"Starting site creation for {site_name}")
-#     frappe.logger().info(f"Payload: {payload}")
-
-#     try:
-#         # 1️⃣ Create site using bench command
-#         print(f"⚙️  Running bench new-site command...")
-        
-#         cmd = [
-#             "/home/frappe/.local/bin/bench", "new-site", site_name,
-#             "--db-name", db_name,
-#             "--admin-password", payload.get("password"),
-#             "--install-app", "erpnext",
-#             "--mariadb-user-host-login-scope=%"
-#         ]
-
-#         # Install additional apps if specified
-#         for app in payload.get("apps", []):
-#             cmd.extend(["--install-app", app])
-
-#         print(f"📝 Command: {' '.join(cmd)}")
-
-#         result = subprocess.run(
-#             cmd, 
-#             cwd=bench_path, 
-#             check=True,
-#             capture_output=True,
-#             text=True,
-#             timeout=1500  # 5 minute timeout
-#         )
-        
-#         # Log subprocess output
-#         if result.stdout:
-#             print(f"✅ Bench output:\n{result.stdout}")
-#         if result.stderr:
-#             print(f"⚠️  Bench stderr:\n{result.stderr}")
-        
-#         print(f"✅ Site {site_name} created successfully")
-#         frappe.logger().info(f"Site {site_name} created successfully")
-
-#         # 2️⃣ Run setup wizard on the new site
-#         print(f"🔧 Initializing site context for {site_name}...")
-        
-#         frappe.init(site=site_name, force=True)
-#         frappe.connect()
-#         frappe.set_user("Administrator")
-#         # ✅ Verify connection
-#         print(f"🔍 Connected to site: {frappe.local.site}")
-#         print(f"👤 Current user: {frappe.session.user}")
-#         print(f"🗄️  Database: {frappe.conf.db_name}")
-#         frappe.clear_cache()
-#         print("Cache Cleared")
-#         # Additional verification - query the database
-
-#         frappe.conf.trigger_site_setup_in_background = True
-
-#         setup_payload = {
-#             "currency": payload.get("currency"),
-#             "country": payload.get("country"),
-#             "timezone": payload.get("timezone"),
-#             "language": payload.get("language", "en"),
-#             "full_name": payload.get("full_name"),
-#             "email": payload.get("email"),
-#             "password": payload.get("password"),
-#             "company_name": payload.get("company_name"),
-#             "company_abbr": payload.get("company_abbr"),
-#             "chart_of_accounts": payload.get("chart_of_accounts"),
-#             "fy_start_date": payload.get("fy_start_date"),
-#             "fy_end_date": payload.get("fy_end_date"),
-#             "setup_demo": payload.get("setup_demo", 0),
-#         }
-
-#         print(f"🏗️  Running ERPNext setup wizard...")
-#         print(f"📋 Setup config: {json.dumps(setup_payload, indent=2, default=str)}")
-
-
-
-#         # Step 2 — ✅ ADD THIS LINE — auto-add domain to Caddy
-#         add_caddy_domain(site_name)
-
-
-#         # Run ERPNext setup wizard
-#         # from frappe.desk.page.setup_wizard.setup_wizard import setup_complete
-
-#         if frappe.is_setup_complete():
-#             print(f"⚠️  Setup wizard already completed for {site_name}, skipping setup.")
-#             return {"status": "ok"}
-
-#         kwargs = parse_args(sanitize_input(setup_payload))
-#         stages = get_setup_stages(kwargs)
-#         is_background_task = frappe.conf.get("trigger_site_setup_in_background")
-#         print(f"is_background_task = {is_background_task}")
-#         if is_background_task:
-#             process_setup_stages.enqueue(stages=stages, user_input=kwargs, is_background_task=True)
-#             print(f"🎉 Site provisioning completed successfully!")
-
-#             return {"status": "registered"}
-#         else:
-#             print(f"🎉 Site provisioning completed successfully!")
-            
-#             return {
-#                 "status": "success",
-#                 "site": site_name,
-#                 "message": f"Site {site_name} created and configured successfully"
-#             }
-#             return process_setup_stages(stages, kwargs)
-
-#         # setup_complete(json.dumps(setup_payload))
-        
-#         # Commit changes
-#         # frappe.db.commit()
-        
-#         print(f"✅ Setup wizard completed for {site_name}")
-#         frappe.logger().info(f"Setup wizard completed for {site_name}")
-
-#         # 3️⃣ Send welcome email (optional)
-#         # print(f"📧 Sending welcome email to {payload.get('email')}...")
-#         # send_welcome_email(payload.get("email"), site_name, payload.get("company_name"))
-    
-
-#     except subprocess.CalledProcessError as e:
-#         error_msg = f"Bench command failed: {e.stderr}"
-#         print(f"❌ ERROR: {error_msg}")
-#         frappe.logger().error(error_msg)
-#         frappe.log_error(error_msg, "Site Creation Failed")
-#         raise  # Re-raise to mark job as failed
-
-#     except Exception as e:
-#         error_msg = f"Site setup failed for {site_name}: {str(e)}"
-#         print(f"❌ ERROR: {error_msg}")
-#         import traceback
-#         print(f"📍 Traceback:\n{traceback.format_exc()}")
-#         frappe.logger().error(error_msg)
-#         frappe.log_error(error_msg, "Site Creation Failed")
-#         raise
-
-
-# def send_welcome_email(email, site_name, company_name):
-#     """Send welcome email with site details"""
-#     try:
-#         frappe.sendmail(
-#             recipients=[email],
-#             subject=f"Welcome to {company_name} - Your ERP Site is Ready!",
-#             message=f"""
-#             <h2>Your ERP site is ready! 🎉</h2>
-#             <p>Your site has been successfully created and configured.</p>
-            
-#             <p><strong>Site URL:</strong> <a href="https://{site_name}">https://{site_name}</a></p>
-#             <p><strong>Username:</strong> {email}</p>
-            
-#             <p>You can now log in and start using your ERP system.</p>
-            
-#             <p>If you have any questions, please contact our support team.</p>
-            
-#             <p>Best regards,<br>Your ERP Team</p>
-#             """,
-#             now=True
-#         )
-#         print(f"✅ Welcome email sent to {email}")
-#         frappe.logger().info(f"Welcome email sent to {email}")
-#     except Exception as e:
-#         # Don't fail the job if email fails
-#         print(f"⚠️  Failed to send welcome email: {str(e)}")
-#         frappe.logger().error(f"Failed to send welcome email: {str(e)}")
-#         frappe.log_error(str(e), "Welcome Email Failed")
-
-
-# import frappe
-# import subprocess
-# import json
-# import os
-# import shutil
-# from saas_provisioning.dns import add_caddy_domain
-
-# from frappe.desk.page.setup_wizard.setup_wizard import get_setup_stages, parse_args, process_setup_stages, sanitize_input
-
-# MARIADB_ROOT_USERNAME = "root"
-# MARIADB_ROOT_PASSWORD = "root123"  # ✅ Set this
-
-# def create_site_job(site_name, db_name, payload):
-#     bench_path = frappe.utils.get_bench_path()
-
-#     print(f"🚀 Starting site creation for {site_name}")
-#     frappe.logger().info(f"Starting site creation for {site_name}")
-
-#     try:
-#         # 1️⃣ Create site using bench command
-#         cmd = [
-#             "/home/frappe/.local/bin/bench", "new-site", site_name,
-#             "--db-name", db_name,
-#             "--admin-password", payload.get("password"),
-#             "--install-app", "erpnext",
-#             "--mariadb-user-host-login-scope=%",
-#             "--mariadb-root-username", MARIADB_ROOT_USERNAME,  # ✅ Prevents interactive prompt
-#             "--mariadb-root-password", MARIADB_ROOT_PASSWORD,  # ✅ Prevents interactive prompt
-#         ]
-
-#         for app in payload.get("apps", []):
-#             cmd.extend(["--install-app", app])
-
-#         print(f"📝 Running bench new-site for {site_name}")
-
-#         result = subprocess.run(
-#             cmd,
-#             cwd=bench_path,
-#             check=True,
-#             capture_output=True,
-#             text=True,
-#             timeout=3600  # ✅ 1 hour — bench new-site takes ~2 mins but give plenty of room
-#         )
-
-#         if result.stdout:
-#             print(f"✅ Bench output:\n{result.stdout}")
-#         if result.stderr:
-#             print(f"⚠️  Bench stderr:\n{result.stderr}")
-
-#         print(f"✅ Site {site_name} created successfully")
-#         frappe.logger().info(f"Site {site_name} created successfully")
-
-#         # 2️⃣ Initialize site context
-#         frappe.init(site=site_name, force=True)
-#         frappe.connect()
-#         frappe.set_user("Administrator")
-#         frappe.clear_cache()
-
-#         frappe.conf.trigger_site_setup_in_background = True
-
-#         setup_payload = {
-#             "currency": payload.get("currency"),
-#             "country": payload.get("country"),
-#             "timezone": payload.get("timezone"),
-#             "language": payload.get("language", "en"),
-#             "full_name": payload.get("full_name"),
-#             "email": payload.get("email"),
-#             "password": payload.get("password"),
-#             "company_name": payload.get("company_name"),
-#             "company_abbr": payload.get("company_abbr"),
-#             "chart_of_accounts": payload.get("chart_of_accounts"),
-#             "fy_start_date": payload.get("fy_start_date"),
-#             "fy_end_date": payload.get("fy_end_date"),
-#             "setup_demo": payload.get("setup_demo", 0),
-#         }
-
-#         if frappe.is_setup_complete():
-#             print(f"⚠️  Setup already completed for {site_name}, skipping.")
-#             add_caddy_domain(site_name)
-#             return {"status": "ok"}
-
-#         # 3️⃣ Run ERPNext setup wizard
-#         kwargs = parse_args(sanitize_input(setup_payload))
-#         stages = get_setup_stages(kwargs)
-#         is_background_task = frappe.conf.get("trigger_site_setup_in_background")
-
-#         print(f"is_background_task = {is_background_task}")
-
-#         if is_background_task:
-#             process_setup_stages.enqueue(
-#                 stages=stages,
-#                 user_input=kwargs,
-#                 is_background_task=True,
-#                 timeout=1800
-#             )
-#         else:
-#             process_setup_stages(stages, kwargs)
-
-#         # 4️⃣ Add domain to Caddy AFTER everything succeeds
-#         print(f"🌐 Adding {site_name} to Caddy...")
-#         add_caddy_domain(site_name)
-
-#         print(f"🎉 Site provisioning completed successfully!")
-#         frappe.logger().info(f"Site {site_name} provisioned successfully")
-
-#         return {"status": "success", "site": site_name}
-
-#     except subprocess.CalledProcessError as e:
-#         error_msg = f"Bench command failed: {e.stderr}"
-#         print(f"❌ ERROR: {error_msg}")
-#         frappe.log_error(error_msg, "Site Creation Failed")
-#         raise
-
-#     except Exception as e:
-#         import traceback
-#         error_msg = f"Site setup failed for {site_name}: {str(e)}"
-#         print(f"❌ ERROR: {error_msg}")
-#         print(f"📍 Traceback:\n{traceback.format_exc()}")
-#         frappe.log_error(error_msg, "Site Creation Failed")
-#         raise
-
-
-# def send_welcome_email(email, site_name, company_name):
-#     try:
-#         frappe.sendmail(
-#             recipients=[email],
-#             subject=f"Welcome to {company_name} - Your ERP Site is Ready!",
-#             message=f"""
-#             <h2>Your ERP site is ready! 🎉</h2>
-#             <p><strong>Site URL:</strong> <a href="https://{site_name}">https://{site_name}</a></p>
-#             <p><strong>Username:</strong> {email}</p>
-#             <p>Best regards,<br>Your ERP Team</p>
-#             """,
-#             now=True
-#         )
-#         print(f"✅ Welcome email sent to {email}")
-#     except Exception as e:
-#         print(f"⚠️  Failed to send welcome email: {str(e)}")
-
-
-
-
-# import frappe
-# import subprocess
-# import json
-# import os
-# import shutil
-# import time
-# from saas_provisioning.dns import add_caddy_domain
-
-# from frappe.desk.page.setup_wizard.setup_wizard import get_setup_stages, parse_args, process_setup_stages, sanitize_input
-
-# MARIADB_ROOT_USERNAME = "root"
-# MARIADB_ROOT_PASSWORD = "root123"
-
-
-# def create_site_job(site_name, db_name, payload):
-#     bench_path = frappe.utils.get_bench_path()
-
-#     print(f"🚀 Starting site creation for {site_name}")
-#     frappe.logger().info(f"Starting site creation for {site_name}")
-
-#     try:
-#         # 1️⃣ Create site using bench command
-#         cmd = [
-#             "/home/frappe/.local/bin/bench", "new-site", site_name,
-#             "--db-name", db_name,
-#             "--admin-password", payload.get("password"),
-#             "--install-app", "erpnext",
-#             "--mariadb-user-host-login-scope=%",
-#             "--mariadb-root-username", MARIADB_ROOT_USERNAME,
-#             "--mariadb-root-password", MARIADB_ROOT_PASSWORD,
-#         ]
-
-#         for app in payload.get("apps", []):
-#             cmd.extend(["--install-app", app])
-
-#         print(f"📝 Running bench new-site for {site_name}")
-
-#         result = subprocess.run(
-#             cmd,
-#             cwd=bench_path,
-#             check=True,
-#             capture_output=True,
-#             text=True,
-#             timeout=3600
-#         )
-
-#         if result.stdout:
-#             print(f"✅ Bench output:\n{result.stdout}")
-#         if result.stderr:
-#             print(f"⚠️  Bench stderr:\n{result.stderr}")
-
-#         print(f"✅ Site {site_name} created successfully")
-#         frappe.logger().info(f"Site {site_name} created successfully")
-
-#         # 2️⃣ Initialize site context
-#         frappe.init(site=site_name, force=True)
-#         frappe.connect()
-#         frappe.set_user("Administrator")
-#         frappe.clear_cache()
-
-#         # 3️⃣ Check if setup already complete
-#         if frappe.is_setup_complete():
-#             print(f"⚠️  Setup already completed for {site_name}, skipping.")
-#             add_caddy_domain(site_name)
-#             return {"status": "ok"}
-
-#         frappe.conf.trigger_site_setup_in_background = True
-
-#         setup_payload = {
-#             "currency": payload.get("currency"),
-#             "country": payload.get("country"),
-#             "timezone": payload.get("timezone"),
-#             "language": payload.get("language", "en"),
-#             "full_name": payload.get("full_name"),
-#             "email": payload.get("email"),
-#             "password": payload.get("password"),
-#             "company_name": payload.get("company_name"),
-#             "company_abbr": payload.get("company_abbr"),
-#             "chart_of_accounts": payload.get("chart_of_accounts"),
-#             "fy_start_date": payload.get("fy_start_date"),
-#             "fy_end_date": payload.get("fy_end_date"),
-#             "setup_demo": payload.get("setup_demo", 0),
-#         }
-
-#         # 4️⃣ Run ERPNext setup wizard
-#         kwargs = parse_args(sanitize_input(setup_payload))
-#         stages = get_setup_stages(kwargs)
-#         is_background_task = frappe.conf.get("trigger_site_setup_in_background")
-
-#         print(f"is_background_task = {is_background_task}")
-
-#         if is_background_task:
-#             # Enqueue setup wizard
-#             process_setup_stages.enqueue(
-#                 stages=stages,
-#                 user_input=kwargs,
-#                 is_background_task=True,
-#                 timeout=1800
-#             )
-
-#             # 5️⃣ Poll until setup wizard completes (max 15 mins)
-#             print(f"⏳ Waiting for setup wizard to complete for {site_name}...")
-#             setup_complete = False
-
-#             for attempt in range(90):  # 90 x 10s = 15 mins
-#                 time.sleep(10)
-#                 try:
-#                     frappe.init(site=site_name, force=True)
-#                     frappe.connect()
-#                     frappe.set_user("Administrator")
-
-#                     if frappe.is_setup_complete():
-#                         setup_complete = True
-#                         print(f"✅ Setup wizard completed for {site_name} (attempt {attempt + 1})")
-#                         frappe.logger().info(f"Setup wizard completed for {site_name}")
-#                         break
-#                     else:
-#                         print(f"⏳ Setup not complete yet... attempt {attempt + 1}/90")
-
-#                 except Exception as poll_error:
-#                     print(f"⚠️  Poll error on attempt {attempt + 1}: {str(poll_error)}")
-#                     continue
-
-#             if not setup_complete:
-#                 error_msg = f"Setup wizard timed out after 15 mins for {site_name}"
-#                 print(f"❌ {error_msg}")
-#                 frappe.log_error(error_msg, "Provisioning Timeout")
-#                 raise Exception(error_msg)
-
-#         else:
-#             # Synchronous setup
-#             process_setup_stages(stages, kwargs)
-#             print(f"✅ Synchronous setup completed for {site_name}")
-
-#         # 6️⃣ Add domain to Caddy AFTER setup is fully complete
-#         print(f"🌐 Adding {site_name} to Caddy...")
-#         add_caddy_domain(site_name)
-
-#         # 7️⃣ Send welcome email
-#         send_welcome_email(
-#             email=payload.get("email"),
-#             site_name=site_name,
-#             company_name=payload.get("company_name")
-#         )
-
-#         print(f"🎉 Site provisioning completed successfully!")
-#         frappe.logger().info(f"Site {site_name} provisioned successfully")
-
-#         return {"status": "success", "site": site_name}
-
-#     except subprocess.CalledProcessError as e:
-#         error_msg = f"Bench command failed: {e.stderr}"
-#         print(f"❌ ERROR: {error_msg}")
-#         frappe.log_error(error_msg, "Site Creation Failed")
-#         raise
-
-#     except Exception as e:
-#         import traceback
-#         error_msg = f"Site setup failed for {site_name}: {str(e)}"
-#         print(f"❌ ERROR: {error_msg}")
-#         print(f"📍 Traceback:\n{traceback.format_exc()}")
-#         frappe.log_error(error_msg, "Site Creation Failed")
-#         raise
-
-
-# def send_welcome_email(email, site_name, company_name):
-#     try:
-#         frappe.sendmail(
-#             recipients=[email],
-#             subject=f"Welcome to {company_name} - Your ERP Site is Ready!",
-#             message=f"""
-#             <h2>Your ERP site is ready! 🎉</h2>
-#             <p><strong>Site URL:</strong> <a href="https://{site_name}">https://{site_name}</a></p>
-#             <p><strong>Username:</strong> {email}</p>
-#             <p>Best regards,<br>Your ERP Team</p>
-#             """,
-#             now=True
-#         )
-#         print(f"✅ Welcome email sent to {email}")
-#     except Exception as e:
-#         print(f"⚠️  Failed to send welcome email: {str(e)}")
-
-
-
 import frappe
 import subprocess
-import json
-import os
-import shutil
-import time
 from saas_provisioning.dns import add_caddy_domain
 
 from frappe.desk.page.setup_wizard.setup_wizard import get_setup_stages, parse_args, process_setup_stages, sanitize_input
@@ -630,31 +114,61 @@ def create_site_job(site_name, db_name, payload):
         if raw_timezone != timezone:
             print(f"⚠️  Timezone '{raw_timezone}' mapped to '{timezone}'")
         
-        # Country-specific fiscal year mappings
+        # Get fiscal year start month from payload (REQUIRED FIELD)
         country = payload.get("country") or "United States"
-        fiscal_years = {
-            "United States": (f"{current_year}-01-01", f"{current_year}-12-31"),  # Jan-Dec
-            "United Kingdom": (f"{current_year}-04-06", f"{current_year + 1}-04-05"),  # Apr-Apr
-            "India": (f"{current_year}-04-01", f"{current_year + 1}-03-31"),  # Apr-Mar
-            "Australia": (f"{current_year}-07-01", f"{current_year + 1}-06-30"),  # Jul-Jun
-            "Canada": (f"{current_year}-01-01", f"{current_year}-12-31"),  # Jan-Dec
-            "Germany": (f"{current_year}-01-01", f"{current_year}-12-31"),  # Jan-Dec
-            "France": (f"{current_year}-01-01", f"{current_year}-12-31"),  # Jan-Dec
-            "Japan": (f"{current_year}-04-01", f"{current_year + 1}-03-31"),  # Apr-Mar
-            "Singapore": (f"{current_year}-01-01", f"{current_year}-12-31"),  # Jan-Dec
-        }
+        fy_start_month = payload.get("fy_start_month") or "04"  # Default to April if not provided
         
-        # Get fiscal year for the country, default to calendar year if not found
-        if country in fiscal_years:
-            default_fy_start, default_fy_end = fiscal_years[country]
+        # Validate that fy_start_month is provided
+        if not fy_start_month:
+            error_msg = "❌ fy_start_month is a required field (1-12)"
+            print(error_msg)
+            frappe.log_error(error_msg, "Missing Fiscal Year Start Month")
+            raise ValueError(error_msg)
+        
+        # Convert to integer if it's a string
+        try:
+            fy_start_month = int(fy_start_month)
+        except (ValueError, TypeError):
+            error_msg = f"❌ fy_start_month must be an integer between 1-12, got: {fy_start_month}"
+            print(error_msg)
+            frappe.log_error(error_msg, "Invalid Fiscal Year Start Month")
+            raise ValueError(error_msg)
+        
+        # Validate month is between 1-12
+        if not (1 <= fy_start_month <= 12):
+            error_msg = f"❌ fy_start_month must be between 1-12, got: {fy_start_month}"
+            print(error_msg)
+            frappe.log_error(error_msg, "Invalid Fiscal Year Start Month")
+            raise ValueError(error_msg)
+        
+        # Calculate fiscal year start and end dates based on start month
+        # If fiscal year starts in current month or later, it starts this year
+        # Otherwise, it started last year
+        today = datetime.datetime.now()
+        
+        if fy_start_month <= today.month:
+            fy_start_year = current_year
+            fy_end_year = current_year + 1
         else:
-            # Default to calendar year (Jan-Dec)
-            default_fy_start = f"{current_year}-01-01"
-            default_fy_end = f"{current_year}-12-31"
+            fy_start_year = current_year - 1
+            fy_end_year = current_year
         
-        # Override with provided dates if explicitly set
-        fy_start_date = payload.get("fy_start_date") or default_fy_start
-        fy_end_date = payload.get("fy_end_date") or default_fy_end
+        # Calculate end month (one month before start month of next year)
+        fy_end_month = (fy_start_month - 1) % 12 + 1
+        
+        # Get last day of end month
+        if fy_end_month == 12:
+            last_day_of_end_month = 31
+        else:
+            # Get last day of month
+            next_month = datetime.datetime(fy_end_year, fy_end_month + 1, 1)
+            last_day_of_end_month = (next_month - datetime.timedelta(days=1)).day
+        
+        # Build dates
+        fy_start_date = f"{fy_start_year}-{str(fy_start_month).zfill(2)}-01"
+        fy_end_date = f"{fy_end_year}-{str(fy_end_month).zfill(2)}-{str(last_day_of_end_month).zfill(2)}"
+        
+        print(f"💰 Calculated Fiscal Year: {fy_start_date} to {fy_end_date} (Start month: {fy_start_month})")
         
         setup_payload = {
             "currency": payload.get("currency") or "USD",
@@ -677,8 +191,8 @@ def create_site_job(site_name, db_name, payload):
         print(f"  Country: {setup_payload.get('country')}")
         print(f"  Timezone: {setup_payload.get('timezone')}")
         print(f"  Company: {setup_payload.get('company_name')}")
-        print(f"  FY Start: {setup_payload.get('fy_start_date')} (per {country})")
-        print(f"  FY End: {setup_payload.get('fy_end_date')} (per {country})")
+        print(f"  FY Start: {setup_payload.get('fy_start_date')} (start month: {fy_start_month})")
+        print(f"  FY End: {setup_payload.get('fy_end_date')}")
         print(f"  Chart of Accounts: {setup_payload.get('chart_of_accounts')}")
 
         # 5️⃣ Run ERPNext setup wizard synchronously
