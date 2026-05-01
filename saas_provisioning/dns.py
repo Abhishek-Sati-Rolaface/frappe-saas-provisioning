@@ -59,7 +59,14 @@ def add_dns_record(subdomain: str):
     try:
         frappe.logger().info(f"DNS: Sending PUT request to {url}")
         frappe.logger().info(f"DNS: Subdomain: {subdomain}, Server IP: {server_ip}")
-        response = requests.put(url, json=payload, headers=headers, timeout=10)
+        # response = requests.put(url, json=payload, headers=headers, timeout=10)
+        response = requests.put(
+            url,
+            json=payload,
+            headers=headers,
+            timeout=30,
+            proxies={"http": None, "https": None}  # worker proxy bypass
+        )
         
         frappe.logger().info(f"DNS: Response status code: {response.status_code}")
         if response.text:
@@ -117,8 +124,14 @@ def add_caddy_domain(site_name: str):
     frontend_domain = f"{company}.erp.{domain}"       # rolaerpnew32.erp.rolaface.com
 
     # 1. Add DNS records
-    add_dns_record(f"api.erp.{company}")  # api.erp.rolaerpnew32
-    add_dns_record(f"{company}.erp")      # rolaerpnew32.erp
+    # add_dns_record(f"api.erp.{company}")  # api.erp.rolaerpnew32
+    # add_dns_record(f"{company}.erp")      # rolaerpnew32.erp
+
+    try:
+        add_dns_record(f"api.erp.{company}")
+        add_dns_record(f"{company}.erp")
+    except Exception as dns_err:
+        frappe.logger().warning(f"DNS record add failed (non-fatal): {dns_err}")
 
     # 2. Check for duplicates
     with open(CADDYFILE_PATH, "r") as f:

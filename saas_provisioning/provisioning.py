@@ -196,6 +196,19 @@ def create_site_job(site_name, db_name, payload):
         print(f"  Chart of Accounts: {setup_payload.get('chart_of_accounts')}")
 
         # 5️⃣ Run ERPNext setup wizard synchronously
+        # print(f"🔧 Running setup wizard for {site_name}...")
+        # kwargs = parse_args(sanitize_input(setup_payload))
+        # stages = get_setup_stages(kwargs)
+
+        print(f"🌐 Adding {site_name} to Caddy BEFORE setup wizard...")
+        try:
+            add_caddy_domain(site_name)
+            print(f"✅ Caddy domain added: {site_name}")
+        except Exception as caddy_err:
+            print(f"⚠️  Caddy setup failed (non-fatal): {caddy_err}")
+            frappe.logger().warning(f"Caddy early setup failed: {caddy_err}")
+
+        # 6️⃣ Run ERPNext setup wizard synchronously
         print(f"🔧 Running setup wizard for {site_name}...")
         kwargs = parse_args(sanitize_input(setup_payload))
         stages = get_setup_stages(kwargs)
@@ -222,8 +235,8 @@ def create_site_job(site_name, db_name, payload):
             print(f"⚠️  Setup not marked as complete, but continuing with provisioning...")
 
         # 6️⃣ Add Caddy domain
-        print(f"🌐 Adding {site_name} to Caddy...")
-        add_caddy_domain(site_name)
+        # print(f"🌐 Adding {site_name} to Caddy...")
+        # add_caddy_domain(site_name)
 
         print(f"🎉 Site provisioning completed successfully!")
         frappe.logger().info(f"Site {site_name} provisioned successfully")
