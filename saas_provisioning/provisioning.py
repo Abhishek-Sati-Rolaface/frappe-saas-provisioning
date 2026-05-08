@@ -20,7 +20,7 @@ def create_site_job(site_name, db_name, payload):
         cmd = [
             "/home/frappe/.local/bin/bench", "new-site", site_name,
             "--db-name", db_name,
-            "--admin-password", payload.get("password"),
+            "--admin-password", "root",
             "--install-app", "erpnext",
             "--install-app", "auth_api",
             "--install-app", "custom_api",
