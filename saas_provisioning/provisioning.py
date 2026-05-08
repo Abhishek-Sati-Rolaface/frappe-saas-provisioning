@@ -256,23 +256,23 @@ def create_site_job(site_name, db_name, payload):
             print(f"⚠️  Setup not marked as complete, but continuing with provisioning...")
 
         # ── Convert provisioned user to Website User ──────────────────────────
-        user_email = payload.get("email")
-        if user_email and user_email != "Administrator":
-            try:
-                print(f"👤 Converting {user_email} to Website User...")
+        # user_email = payload.get("email")
+        # if user_email and user_email != "Administrator":
+        #     try:
+        #         print(f"👤 Converting {user_email} to Website User...")
 
-                if frappe.db.exists("User", user_email):
-                    frappe.db.set_value("User", user_email, "user_type", "Website User")
-                    frappe.db.commit()
+        #         if frappe.db.exists("User", user_email):
+        #             frappe.db.set_value("User", user_email, "user_type", "Website User")
+        #             frappe.db.commit()
 
-                    print(f"✅ {user_email} converted to Website User successfully")
-                    frappe.logger().info(f"User {user_email} set as Website User for site {site_name}")
-                else:
-                    print(f"⚠️  User {user_email} not found, skipping conversion")
+        #             print(f"✅ {user_email} converted to Website User successfully")
+        #             frappe.logger().info(f"User {user_email} set as Website User for site {site_name}")
+        #         else:
+        #             print(f"⚠️  User {user_email} not found, skipping conversion")
 
-            except Exception as user_error:
-                print(f"⚠️  Failed to convert user to Website User (non-fatal): {user_error}")
-                frappe.logger().warning(f"User type conversion failed for {user_email}: {user_error}")
+        #     except Exception as user_error:
+        #         print(f"⚠️  Failed to convert user to Website User (non-fatal): {user_error}")
+        #         frappe.logger().warning(f"User type conversion failed for {user_email}: {user_error}")
 
         # 6️⃣ Add Caddy domain
         # print(f"🌐 Adding {site_name} to Caddy...")
