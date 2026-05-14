@@ -24,6 +24,8 @@ def create_site_job(site_name, db_name, payload):
             "--install-app", "erpnext",
             "--install-app", "auth_api",
             "--install-app", "custom_api",
+            "--install-app", "custom_hrms",
+            "--install-app", "hrms",
             "--mariadb-user-host-login-scope=%",
             "--mariadb-root-username", MARIADB_ROOT_USERNAME,
             "--mariadb-root-password", MARIADB_ROOT_PASSWORD,
