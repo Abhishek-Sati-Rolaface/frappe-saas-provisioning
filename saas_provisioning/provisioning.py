@@ -147,23 +147,6 @@ def create_site_job(site_name, db_name, payload):
         # Otherwise, it started last year
         today = datetime.datetime.now()
         
-        # if fy_start_month <= today.month:
-        #     fy_start_year = current_year
-        #     fy_end_year = current_year + 1
-        # else:
-        #     fy_start_year = current_year - 1
-        #     fy_end_year = current_year
-        
-        # # Calculate end month (one month before start month of next year)
-        # fy_end_month = (fy_start_month - 2) % 12 + 1  # ← was (fy_start_month - 1) % 12 + 1
-        
-        # # Get last day of end month
-        # if fy_end_month == 12:
-        #     last_day_of_end_month = 31
-        # else:
-        #     next_month = datetime.datetime(fy_end_year, fy_end_month + 1, 1)
-        #     last_day_of_end_month = (next_month - datetime.timedelta(days=1)).day
-
         if fy_start_month <= today.month:
            fy_start_year = current_year
         else:
@@ -216,10 +199,6 @@ def create_site_job(site_name, db_name, payload):
         print(f"  FY End: {setup_payload.get('fy_end_date')}")
         print(f"  Chart of Accounts: {setup_payload.get('chart_of_accounts')}")
 
-        # 5️⃣ Run ERPNext setup wizard synchronously
-        # print(f"🔧 Running setup wizard for {site_name}...")
-        # kwargs = parse_args(sanitize_input(setup_payload))
-        # stages = get_setup_stages(kwargs)
 
         print(f"🌐 Adding {site_name} to Caddy BEFORE setup wizard...")
         try:
@@ -251,32 +230,44 @@ def create_site_job(site_name, db_name, payload):
         frappe.set_user("Administrator")
         setup_status = frappe.db.get_single_value("System Settings", "setup_complete")
         print(f"Setup complete status: {setup_status}")
+        user_email = payload.get("email")
+        if user_email and user_email != "Administrator":
+            try:
+                if frappe.db.exists("User", user_email):
+
+                    # ── Check if Administrator role exists ────────────────────
+                    admin_role_exists = frappe.db.exists("Role", "Administrator")
+
+                    if not admin_role_exists:
+                        print(f"⚠️  Administrator role does not exist, skipping.")
+                    else:
+                        # ── Check if already assigned ─────────────────────────
+                        already_assigned = frappe.db.exists("Has Role", {
+                            "parent": user_email,
+                            "parenttype": "User",
+                            "role": "Administrator",
+                        })
+
+                        if already_assigned:
+                            print(f"✅ Administrator role already assigned to {user_email}")
+                        else:
+                            # ── Assign the role ───────────────────────────────
+                            user_doc = frappe.get_doc("User", user_email)
+                            user_doc.append("roles", {"role": "Administrator"})
+                            user_doc.save(ignore_permissions=True)
+                            frappe.db.commit()
+
+                            print(f"✅ Administrator role assigned to {user_email}")
+                            frappe.logger().info(f"Administrator role assigned to {user_email} for site {site_name}")
+                else:
+                    print(f"⚠️  User {user_email} not found, skipping role assignment.")
+
+            except Exception as role_error:
+                print(f"⚠️  Failed to assign Administrator role (non-fatal): {role_error}")
+                frappe.logger().warning(f"Role assignment failed for {user_email}: {role_error}")
 
         if not setup_status:
             print(f"⚠️  Setup not marked as complete, but continuing with provisioning...")
-
-        # ── Convert provisioned user to Website User ──────────────────────────
-        # user_email = payload.get("email")
-        # if user_email and user_email != "Administrator":
-        #     try:
-        #         print(f"👤 Converting {user_email} to Website User...")
-
-        #         if frappe.db.exists("User", user_email):
-        #             frappe.db.set_value("User", user_email, "user_type", "Website User")
-        #             frappe.db.commit()
-
-        #             print(f"✅ {user_email} converted to Website User successfully")
-        #             frappe.logger().info(f"User {user_email} set as Website User for site {site_name}")
-        #         else:
-        #             print(f"⚠️  User {user_email} not found, skipping conversion")
-
-        #     except Exception as user_error:
-        #         print(f"⚠️  Failed to convert user to Website User (non-fatal): {user_error}")
-        #         frappe.logger().warning(f"User type conversion failed for {user_email}: {user_error}")
-
-        # 6️⃣ Add Caddy domain
-        # print(f"🌐 Adding {site_name} to Caddy...")
-        # add_caddy_domain(site_name)
 
         print(f"🎉 Site provisioning completed successfully!")
         frappe.logger().info(f"Site {site_name} provisioned successfully")
